@@ -2703,4 +2703,28 @@ config MSM_HOTPLUG
 	  The MSM hotplug driver controls on-/offlining of additional cores based
 	  on current cpu load.
 
+config CPU_EF52_OVERCLOCK
+       bool "Enable CPU Overclocking option"
+       default n
+       help
+         Krait overclocking up to 1.9 GHz
+
+config CPU_EF50_EF51_OVERCLOCK
+       bool "Enable CPU Overclocking option"
+       default n
+       help
+         Krait overclocking up to 1.8 GHz
+
+config LOW_CPUCLOCKS
+       bool "Enable ultra low CPU clocks"
+       default n
+       help
+         Ultra low cpu frequencies enabled for CPU and L2 Cache
+
+config GPU_OVERCLOCK
+	bool "Enable GPU Overclocking option"
+	default n
+	help
+	  APQ8064 GPU overclocking 
+
 endif
