@@ -178,7 +178,7 @@ static struct i2c_driver cyttsp4_i2c_driver = {
 		.owner = THIS_MODULE,
 #if !defined(CONFIG_HAS_EARLYSUSPEND)
 #if defined(CONFIG_PM_SLEEP)
-		.pm = &cyttsp4_pm_ops,
+		//.pm = &cyttsp4_pm_ops,
 #endif
 #endif
 	},

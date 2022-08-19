@@ -2325,13 +2325,15 @@ _cyttsp4_wakeup_exit:
 #endif
     return retval;
 }
+#ifdef CONFIG_EARLYSUSPEND
 
 #if defined(CONFIG_PM) || \
 	defined(CONFIG_PM_SLEEP) || \
 	defined(CONFIG_HAS_EARLYSUSPEND)
 
+
 #if defined(CONFIG_HAS_EARLYSUSPEND)
-int cyttsp4_suspend(void *handle)
+/*int cyttsp4_suspend(void *handle)
 {
     struct cyttsp4 *ts = handle;
 #elif defined(CONFIG_PM_SLEEP)
@@ -2342,6 +2344,9 @@ static int cyttsp4_suspend(struct device *dev)
 int cyttsp4_suspend(void *handle)
 {
 	struct cyttsp4 *ts = handle;
+#endif
+*/
+#endif
 #endif
 
     int retval = 0;
@@ -2440,6 +2445,8 @@ int cyttsp4_suspend(void *handle)
 }
 EXPORT_SYMBOL_GPL(cyttsp4_suspend);
 
+#ifdef CONFIG_EARLYSUSPEND
+
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 int cyttsp4_resume(void *handle)
 {
@@ -2453,6 +2460,8 @@ int cyttsp4_resume(void *handle)
 {
 	struct cyttsp4 *ts = handle;
 #endif
+#endif
+
     int retval = 0;
 
 #ifdef SKY_ULTRASOUNDPEN_FEATURE
@@ -2546,15 +2555,14 @@ int cyttsp4_resume(void *handle)
 EXPORT_SYMBOL_GPL(cyttsp4_resume);
 #endif
 
-#if !defined(CONFIG_HAS_EARLYSUSPEND) && defined(CONFIG_PM_SLEEP)
+#ifdef CONFIG_EARLYSUSPEND
 const struct dev_pm_ops cyttsp4_pm_ops = {
     SET_SYSTEM_SLEEP_PM_OPS(cyttsp4_suspend, cyttsp4_resume)
 };
 EXPORT_SYMBOL_GPL(cyttsp4_pm_ops);
 #endif
 
-
-#if defined(CONFIG_HAS_EARLYSUSPEND)
+#ifdef CONFIG_EARLYSUSPEND
 void cyttsp4_early_suspend(struct early_suspend *h)
 {
     struct cyttsp4 *ts = container_of(h, struct cyttsp4, early_suspend);

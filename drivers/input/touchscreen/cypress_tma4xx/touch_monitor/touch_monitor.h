@@ -293,14 +293,14 @@ static ssize_t monitor_write(struct file *file, const char *buf, size_t count, l
         {
             cyttsp4_sys_test(cyttsp4_data, CY_MUTUAL_RAW);
         }
-        if(strncmp(buf, "suspend", 5)==0)
+        /*if(strncmp(buf, "suspend", 5)==0)
         {
             cyttsp4_suspend(cyttsp4_data);
-        }
-        if(strncmp(buf, "resume",6)==0)
+        }*/
+        /*if(strncmp(buf, "resume",6)==0)
         {
             cyttsp4_resume(cyttsp4_data);
-        }
+        }*/
     }
     *ppos +=nBufSize;
     return nBufSize;
