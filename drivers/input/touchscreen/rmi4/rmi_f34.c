@@ -114,14 +114,14 @@ static int rmi_f34_create_sysfs(struct rmi_function_container *fc);
 
 
 static struct device_attribute attrs[] = {
-	__ATTR(status, RMI_RW_ATTR,
+	__ATTR(status, RMI_RO_ATTR,
 	       rmi_fn_34_status_show, rmi_fn_34_status_store),
 
 	/* Also, sysfs will need to have a file set up to distinguish
 	 * between commands - like Config write/read, Image write/verify. */
-	__ATTR(cmd, RMI_RW_ATTR,
+	__ATTR(cmd, RMI_RO_ATTR,
 	       rmi_fn_34_cmd_show, rmi_fn_34_cmd_store),
-	__ATTR(bootloaderid, RMI_RW_ATTR,
+	__ATTR(bootloaderid, RMI_RO_ATTR,
 	       rmi_fn_34_bootloaderid_show, rmi_fn_34_bootloaderid_store),
 	__ATTR(blocksize, RMI_RO_ATTR,
 	       rmi_fn_34_blocksize_show, rmi_store_error),
@@ -129,7 +129,7 @@ static struct device_attribute attrs[] = {
 	       rmi_fn_34_imageblockcount_show, rmi_store_error),
 	__ATTR(configblockcount, RMI_RO_ATTR,
 	       rmi_fn_34_configblockcount_show, rmi_store_error),
-	__ATTR(blocknum, RMI_RW_ATTR,
+	__ATTR(blocknum, RMI_RO_ATTR,
 	       rmi_fn_34_blocknum_show, rmi_fn_34_blocknum_store),
 	__ATTR(rescanPDT, RMI_WO_ATTR,
 	       rmi_show_error, rmi_fn_34_rescanPDT_store)
@@ -138,7 +138,7 @@ static struct device_attribute attrs[] = {
 struct bin_attribute dev_attr_data = {
 	.attr = {
 		 .name = "data",
-		 .mode = 0664},
+		 .mode = 0644},
 	.size = 0,
 	.read = rmi_fn_34_data_read,
 	.write = rmi_fn_34_data_write,

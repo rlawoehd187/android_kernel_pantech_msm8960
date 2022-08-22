@@ -41,9 +41,6 @@ union f01_device_commands {
 struct f01_device_control {
 	union f01_device_control_0 ctrl0;
 	u8 *interrupt_enable;
-	u8 doze_interval;
-	u8 wakeup_threshold;
-	u8 doze_holdoff;
 };
 
 union f01_query_42 {
@@ -88,9 +85,6 @@ struct f01_data {
 	u8 product_id[RMI_PRODUCT_ID_LENGTH+1];
 
 	u16 interrupt_enable_addr;
-	u16 doze_interval_addr;
-	u16 wakeup_threshold_addr;
-	u16 doze_holdoff_addr;
 
 	int irq_count;
 	int num_of_irq_regs;
@@ -139,30 +133,6 @@ static ssize_t rmi_fn_01_interrupt_enable_show(struct device *dev,
 					 char *buf);
 
 static ssize_t rmi_fn_01_interrupt_enable_store(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t count);
-
-static ssize_t rmi_fn_01_doze_interval_show(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf);
-
-static ssize_t rmi_fn_01_doze_interval_store(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t count);
-
-static ssize_t rmi_fn_01_wakeup_threshold_show(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf);
-
-static ssize_t rmi_fn_01_wakeup_threshold_store(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t count);
-
-static ssize_t rmi_fn_01_doze_holdoff_show(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf);
-
-static ssize_t rmi_fn_01_doze_holdoff_store(struct device *dev,
 					  struct device_attribute *attr,
 					  const char *buf, size_t count);
 
@@ -246,15 +216,6 @@ static struct device_attribute fn_01_attrs[] = {
 	__ATTR(interrupt_enable, RMI_RW_ATTR,
 	       rmi_fn_01_interrupt_enable_show,
 		rmi_fn_01_interrupt_enable_store),
-	__ATTR(doze_interval, RMI_RW_ATTR,
-	       rmi_fn_01_doze_interval_show,
-		rmi_fn_01_doze_interval_store),
-	__ATTR(wakeup_threshold, RMI_RW_ATTR,
-	       rmi_fn_01_wakeup_threshold_show,
-		rmi_fn_01_wakeup_threshold_store),
-	__ATTR(doze_holdoff, RMI_RW_ATTR,
-	       rmi_fn_01_doze_holdoff_show,
-		rmi_fn_01_doze_holdoff_store),
 
 	/* We make report rate RO, since the driver uses that to look for
 	 * resets.  We don't want someone faking us out by changing that
@@ -755,144 +716,6 @@ static ssize_t rmi_fn_01_interrupt_enable_store(struct device *dev,
 
 }
 
-static ssize_t rmi_fn_01_doze_interval_show(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf)
-{
-	struct f01_data *data = NULL;
-	struct rmi_function_container *fc = to_rmi_function_container(dev);
-
-	data = fc->data;
-
-	return snprintf(buf, PAGE_SIZE, "%d\n",
-			data->device_control.doze_interval);
-
-}
-
-static ssize_t rmi_fn_01_doze_interval_store(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t count)
-{
-	struct f01_data *data = NULL;
-	unsigned long new_value;
-	int retval;
-	u16 ctrl_base_addr;
-
-	struct rmi_function_container *fc = to_rmi_function_container(dev);
-
-	data = fc->data;
-
-	retval = strict_strtoul(buf, 10, &new_value);
-	if (retval < 0 || new_value < 0 || new_value > 255) {
-		dev_err(dev, "%s: Invalid doze interval %s.", __func__, buf);
-		return -EINVAL;
-	}
-
-	data->device_control.doze_interval = new_value;
-	ctrl_base_addr = fc->fd.control_base_addr + sizeof(u8) +
-			(sizeof(u8)*(data->num_of_irq_regs));
-	dev_info(dev, "doze_interval store address %x, value %d",
-		ctrl_base_addr, data->device_control.doze_interval);
-
-	retval = rmi_write_block(fc->rmi_dev, data->doze_interval_addr,
-			&data->device_control.doze_interval,
-			sizeof(u8));
-	if (retval >= 0)
-		retval = count;
-	else
-		dev_err(dev, "Failed to write doze interval.\n");
-	return retval;
-
-}
-
-static ssize_t rmi_fn_01_wakeup_threshold_show(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf)
-{
-	struct f01_data *data = NULL;
-	struct rmi_function_container *fc = to_rmi_function_container(dev);
-
-	data = fc->data;
-
-	return snprintf(buf, PAGE_SIZE, "%d\n",
-			data->device_control.wakeup_threshold);
-}
-
-static ssize_t rmi_fn_01_wakeup_threshold_store(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t count)
-{
-	struct f01_data *data = NULL;
-	unsigned long new_value;
-	int retval;
-
-	struct rmi_function_container *fc = to_rmi_function_container(dev);
-
-	data = fc->data;
-
-	retval = strict_strtoul(buf, 10, &new_value);
-	if (retval < 0 || new_value < 0 || new_value > 255) {
-		dev_err(dev, "%s: Invalid wakeup threshold %s.", __func__, buf);
-		return -EINVAL;
-	}
-
-	data->device_control.doze_interval = new_value;
-	retval = rmi_write_block(fc->rmi_dev, data->wakeup_threshold_addr,
-			&data->device_control.wakeup_threshold,
-			sizeof(u8));
-	if (retval >= 0)
-		retval = count;
-	else
-		dev_err(dev, "Failed to write wakeup threshold.\n");
-	return retval;
-
-}
-
-static ssize_t rmi_fn_01_doze_holdoff_show(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf)
-{
-	struct f01_data *data = NULL;
-	struct rmi_function_container *fc = to_rmi_function_container(dev);
-
-	data = fc->data;
-
-	return snprintf(buf, PAGE_SIZE, "%d\n",
-			data->device_control.doze_holdoff);
-
-}
-
-
-static ssize_t rmi_fn_01_doze_holdoff_store(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t count)
-{
-	struct f01_data *data = NULL;
-	unsigned long new_value;
-	int retval;
-
-	struct rmi_function_container *fc = to_rmi_function_container(dev);
-
-	data = fc->data;
-
-	retval = strict_strtoul(buf, 10, &new_value);
-	if (retval < 0 || new_value < 0 || new_value > 255) {
-		dev_err(dev, "%s: Invalid doze holdoff %s.", __func__, buf);
-		return -EINVAL;
-	}
-
-	data->device_control.doze_interval = new_value;
-	retval = rmi_write_block(fc->rmi_dev, data->doze_holdoff_addr,
-			&data->device_control.doze_holdoff,
-			sizeof(u8));
-	if (retval >= 0)
-		retval = count;
-	else
-		dev_err(dev, "Failed to write doze holdoff.\n");
-	return retval;
-
-}
-
 static ssize_t rmi_fn_01_configured_show(struct device *dev,
 				      struct device_attribute *attr,
 				      char *buf)
@@ -1098,76 +921,6 @@ static int rmi_f01_initialize(struct rmi_function_container *fc)
 							"synaptics" : "unknown",
 		 data->product_id);
 
-	/* read control register */
-	if (data->basic_queries.has_adjustable_doze) {
-		data->doze_interval_addr = ctrl_base_addr;
-		ctrl_base_addr++;
-
-		if (pdata->power_management.doze_interval) {
-			data->device_control.doze_interval =
-				pdata->power_management.doze_interval;
-			retval = rmi_write(rmi_dev, data->doze_interval_addr,
-					data->device_control.doze_interval);
-			if (retval < 0) {
-				dev_err(&fc->dev, "Failed to configure F01 doze interval register.\n");
-				goto error_exit;
-			}
-		} else {
-			retval = rmi_read(rmi_dev, data->doze_interval_addr,
-					&data->device_control.doze_interval);
-			if (retval < 0) {
-				dev_err(&fc->dev, "Failed to read F01 doze interval register.\n");
-				goto error_exit;
-			}
-		}
-
-		data->wakeup_threshold_addr = ctrl_base_addr;
-		ctrl_base_addr++;
-
-		if (pdata->power_management.wakeup_threshold) {
-			data->device_control.wakeup_threshold =
-				pdata->power_management.wakeup_threshold;
-			retval = rmi_write(rmi_dev, data->wakeup_threshold_addr,
-					data->device_control.wakeup_threshold);
-			if (retval < 0) {
-				dev_err(&fc->dev, "Failed to configure F01 wakeup threshold register.\n");
-				goto error_exit;
-			}
-		} else {
-			retval = rmi_read(rmi_dev, data->wakeup_threshold_addr,
-					&data->device_control.wakeup_threshold);
-			if (retval < 0) {
-				dev_err(&fc->dev, "Failed to read F01 wakeup threshold register.\n");
-				goto error_exit;
-			}
-		}
-	}
-
-	if (data->basic_queries.has_adjustable_doze_holdoff) {
-		data->doze_holdoff_addr = ctrl_base_addr;
-		ctrl_base_addr++;
-
-		if (pdata->power_management.doze_holdoff) {
-			data->device_control.doze_holdoff =
-				pdata->power_management.doze_holdoff;
-			retval = rmi_write(rmi_dev, data->doze_holdoff_addr,
-					data->device_control.doze_holdoff);
-			if (retval < 0) {
-				dev_err(&fc->dev, "Failed to configure F01 "
-					"doze holdoff register.\n");
-				goto error_exit;
-			}
-		} else {
-			retval = rmi_read(rmi_dev, data->doze_holdoff_addr,
-					&data->device_control.doze_holdoff);
-			if (retval < 0) {
-				dev_err(&fc->dev, "Failed to read F01 doze"
-					" holdoff register.\n");
-				goto error_exit;
-			}
-		}
-	}
-
 	retval = rmi_read_block(rmi_dev, fc->fd.data_base_addr,
 		data->device_status.regs, ARRAY_SIZE(data->device_status.regs));
 	if (retval < 0) {
@@ -1199,19 +952,6 @@ static int rmi_f01_create_sysfs(struct rmi_function_container *fc)
 	dev_info(&fc->dev, "Creating sysfs files.");
 	for (attr_count = 0; attr_count < ARRAY_SIZE(fn_01_attrs);
 			attr_count++) {
-		if (!strcmp("doze_interval", fn_01_attrs[attr_count].attr.name)
-			&& !data->basic_queries.has_lts) {
-			continue;
-		}
-		if (!strcmp("wakeup_threshold",
-			fn_01_attrs[attr_count].attr.name)
-			&& !data->basic_queries.has_adjustable_doze) {
-			continue;
-		}
-		if (!strcmp("doze_holdoff", fn_01_attrs[attr_count].attr.name)
-			&& !data->basic_queries.has_adjustable_doze_holdoff) {
-			continue;
-		}
 		retval = sysfs_create_file(&fc->dev.kobj,
 				      &fn_01_attrs[attr_count].attr);
 		if (retval < 0) {
@@ -1251,36 +991,6 @@ static int rmi_f01_config(struct rmi_function_container *fc)
 	if (retval < 0) {
 		dev_err(&fc->dev, "Failed to write interrupt enable.\n");
 		return retval;
-	}
-	if (data->basic_queries.has_lts) {
-		retval = rmi_write_block(fc->rmi_dev, data->doze_interval_addr,
-				&data->device_control.doze_interval,
-				sizeof(u8));
-		if (retval < 0) {
-			dev_err(&fc->dev, "Failed to write doze interval.\n");
-			return retval;
-		}
-	}
-
-	if (data->basic_queries.has_adjustable_doze) {
-		retval = rmi_write_block(
-				fc->rmi_dev, data->wakeup_threshold_addr,
-				&data->device_control.wakeup_threshold,
-				sizeof(u8));
-		if (retval < 0) {
-			dev_err(&fc->dev, "Failed to write wakeup threshold.\n");
-			return retval;
-		}
-	}
-
-	if (data->basic_queries.has_adjustable_doze_holdoff) {
-		retval = rmi_write_block(fc->rmi_dev, data->doze_holdoff_addr,
-				&data->device_control.doze_holdoff,
-				sizeof(u8));
-		if (retval < 0) {
-			dev_err(&fc->dev, "Failed to write doze holdoff.\n");
-			return retval;
-		}
 	}
 	return 0;
 }

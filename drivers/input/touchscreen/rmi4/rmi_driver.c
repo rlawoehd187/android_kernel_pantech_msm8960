@@ -59,10 +59,6 @@
 #define RMI_DEVICE_RESET_CMD	0x01
 #define DEFAULT_RESET_DELAY_MS	100
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void rmi_driver_early_suspend(struct early_suspend *h);
-static void rmi_driver_late_resume(struct early_suspend *h);
-#endif
 extern void touch_fops_init(void);
 extern void touch_monitor_init(void);
 extern void touch_monitor_exit(void);
@@ -364,7 +360,7 @@ static int rmi_driver_process_config_requests(struct rmi_device *rmi_dev);
 static int rmi_driver_irq_restore(struct rmi_device *rmi_dev);
 
 static struct device_attribute attrs[] = {
-	__ATTR(enabled, RMI_RW_ATTR,
+	__ATTR(enabled, RMI_RO_ATTR,
 	       rmi_driver_enabled_show, rmi_driver_enabled_store),
 #if REGISTER_DEBUG
 	__ATTR(reg, RMI_WO_ATTR,
@@ -1293,13 +1289,6 @@ static int rmi_driver_probe(struct rmi_device *rmi_dev)
 
 	mutex_init(&data->suspend_mutex);
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	rmi_dev->early_suspend_handler.level =
-		EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
-	rmi_dev->early_suspend_handler.suspend = rmi_driver_early_suspend;
-	rmi_dev->early_suspend_handler.resume = rmi_driver_late_resume;
-	register_early_suspend(&rmi_dev->early_suspend_handler);
-#endif /* CONFIG_HAS_EARLYSUSPEND */
 #endif /* CONFIG_PM */
 	data->enabled = true;
 
@@ -1655,17 +1644,6 @@ static int rmi_driver_resume(struct device *dev)
 	return standard_resume(rmi_dev);
 }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void rmi_driver_early_suspend(struct early_suspend *h)
-{
-	return standard_early_suspend(h);
-}
-
-static void rmi_driver_late_resume(struct early_suspend *h)
-{
-	return standard_late_resume(h);
-}
-#endif /* CONFIG_HAS_EARLYSUSPEND */
 #endif /* CONFIG_RMI4_SPECIAL_EARLYSUSPEND */
 
 #endif /* CONFIG_PM */

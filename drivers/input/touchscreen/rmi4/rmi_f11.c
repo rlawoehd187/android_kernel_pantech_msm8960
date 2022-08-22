@@ -136,12 +136,12 @@ static void f11_set_abs_params(struct rmi_function_container *fc, int index);
 void rmi_clear_finger(struct input_dev *input);
 
 static struct device_attribute attrs[] = {
-	__ATTR(relreport, RMI_RW_ATTR, f11_relreport_show, f11_relreport_store),
+	__ATTR(relreport, RMI_RO_ATTR, f11_relreport_show, f11_relreport_store),
 	__ATTR(maxPos, RMI_RO_ATTR, f11_maxPos_show, rmi_store_error),
 #if RESUME_REZERO
-	__ATTR(rezeroOnResume, RMI_RW_ATTR, f11_rezeroOnResume_show,
+	__ATTR(rezeroOnResume, RMI_RO_ATTR, f11_rezeroOnResume_show,
 		f11_rezeroOnResume_store),
-	__ATTR(rezeroWait, RMI_RW_ATTR, f11_rezeroWait_show,
+	__ATTR(rezeroWait, RMI_RO_ATTR, f11_rezeroWait_show,
 		f11_rezeroWait_store),
 #endif
 	__ATTR(rezero, RMI_WO_ATTR, rmi_show_error, f11_rezero_store)
@@ -2349,7 +2349,14 @@ static struct rmi_function_handler function_handler = {
 	.attention = rmi_f11_attention,
 	.remove = rmi_f11_remove,
 #if	RESUME_REZERO
-	.resume = rmi_f11_resume
+#if defined(CONFIG_HAS_EARLYSUSPEND) && \
+			!defined(CONFIG_RMI4_SPECIAL_EARLYSUSPEND)
+	.late_resume = rmi_f11_resume,
+	.early_suspend = rmi_f11_suspend
+#else
+	//.resume = rmi_f11_resume
+	//.suspend = rmi_f11_suspend
+#endif  /* defined(CONFIG_HAS_EARLYSUSPEND) && !def... */
 #endif
 };
 
