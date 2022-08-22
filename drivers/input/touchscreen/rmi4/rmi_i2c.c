@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Synaptics Incorporated
+ * Copyright (c) 2011 Synaptics Incorporated
  * Copyright (c) 2011 Unixphere
  *
  * This program is free software; you can redistribute it and/or modify
@@ -16,15 +16,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
-#define COMMS_DEBUG 0
-
-#define IRQ_DEBUG 0
-
-#if COMMS_DEBUG || IRQ_DEBUG
-#define DEBUG
-#endif
-
 #include <linux/kernel.h>
 #include <linux/lockdep.h>
 #include <linux/module.h>
@@ -36,7 +27,9 @@
 #include <linux/gpio.h>
 #include <linux/rmi.h>
 
-#include "rmi_driver.h"
+#define COMMS_DEBUG 0
+
+#define IRQ_DEBUG 0
 
 #define RMI_PAGE_SELECT_REGISTER 0xff
 #define RMI_I2C_PAGE(addr) (((addr) >> 8) & 0xff)
@@ -61,9 +54,9 @@ static irqreturn_t rmi_i2c_irq_thread(int irq, void *p)
 
 #if IRQ_DEBUG
 	dev_dbg(phys->dev, "ATTN gpio, value: %d.\n",
-			gpio_get_value(pdata->attn_gpio));
+			gpio_get_value(pdata->irq));
 #endif
-	if (gpio_get_value(pdata->attn_gpio) == pdata->attn_polarity) {
+	if (gpio_get_value(pdata->irq) == pdata->irq_polarity) {
 		phys->info.attn_count++;
 		if (driver && driver->irq_handler && rmi_dev)
 			driver->irq_handler(rmi_dev, irq);
@@ -118,8 +111,7 @@ static int rmi_i2c_write_block(struct rmi_phys_device *phys, u16 addr, u8 *buf,
 	u8 txbuf[len + 1];
 	int retval;
 #if	COMMS_DEBUG
-	char debug_buf[len*3 + 1];
-	int i, n;
+	int i;
 #endif
 
 	txbuf[0] = addr & 0xff;
@@ -134,11 +126,10 @@ static int rmi_i2c_write_block(struct rmi_phys_device *phys, u16 addr, u8 *buf,
 	}
 
 #if COMMS_DEBUG
-	n = 0;
-	for (i = 0; i < len; i++)
-		n = snprintf(debug_buf+n, 4, "%02x ", buf[i]);
-	dev_dbg(&client->dev, "RMI4 I2C writes %d bytes at %#06x: %s\n",
-		len, addr, debug_buf);
+	dev_dbg(&client->dev, "RMI4 I2C writes %d bytes: ", sizeof(txbuf));
+	for (i = 0; i < sizeof(txbuf); i++)
+		dev_dbg(&client->dev, "%02x ", txbuf[i]);
+	dev_dbg(&client->dev, "\n");
 #endif
 
 	phys->info.tx_count++;
@@ -146,8 +137,6 @@ static int rmi_i2c_write_block(struct rmi_phys_device *phys, u16 addr, u8 *buf,
 	retval = i2c_master_send(client, txbuf, sizeof(txbuf));
 	if (retval < 0)
 		phys->info.tx_errs++;
-	else
-		retval--; /* don't count the address byte */
 
 exit:
 	mutex_unlock(&data->page_mutex);
@@ -168,9 +157,7 @@ static int rmi_i2c_read_block(struct rmi_phys_device *phys, u16 addr, u8 *buf,
 	u8 txbuf[1] = {addr & 0xff};
 	int retval;
 #if	COMMS_DEBUG
-	char debug_buf[len*3 + 1];
-	char *temp = debug_buf;
-	int i, n;
+	int i;
 #endif
 
 	mutex_lock(&data->page_mutex);
@@ -201,13 +188,10 @@ static int rmi_i2c_read_block(struct rmi_phys_device *phys, u16 addr, u8 *buf,
 		phys->info.rx_errs++;
 #if COMMS_DEBUG
 	else {
-		n = 0;
-		for (i = 0; i < len; i++) {
-			n = sprintf(temp, " %02x", buf[i]);
-			temp += n;
-		}
-		dev_dbg(&client->dev, "RMI4 I2C read %d bytes at %#06x:%s\n",
-			len, addr, debug_buf);
+		dev_dbg(&client->dev, "RMI4 I2C received %d bytes: ", len);
+		for (i = 0; i < len; i++)
+			dev_dbg(&client->dev, "%02x ", buf[i]);
+		dev_dbg(&client->dev, "\n");
 	}
 #endif
 
@@ -221,6 +205,7 @@ static int rmi_i2c_read(struct rmi_phys_device *phys, u16 addr, u8 *buf)
 	int retval = rmi_i2c_read_block(phys, addr, buf, 1);
 	return (retval < 0) ? retval : 0;
 }
+
 
 static int acquire_attn_irq(struct rmi_i2c_data *data)
 {
@@ -251,6 +236,7 @@ error_exit:
 	return retval;
 }
 
+
 static void disable_device(struct rmi_phys_device *phys)
 {
 	struct rmi_i2c_data *data = phys->data;
@@ -265,7 +251,8 @@ static void disable_device(struct rmi_phys_device *phys)
 	data->enabled = false;
 }
 
-static int __devinit rmi_i2c_probe(struct i2c_client *client,
+
+static int rmi_i2c_probe(struct i2c_client *client,
 				  const struct i2c_device_id *id)
 {
 	struct rmi_phys_device *rmi_phys;
@@ -277,26 +264,10 @@ static int __devinit rmi_i2c_probe(struct i2c_client *client,
 		dev_err(&client->dev, "no platform data\n");
 		return -EINVAL;
 	}
-	dev_info(&client->dev, "Probing %s at %#02x (IRQ %d).\n",
-		pdata->sensor_name ? pdata->sensor_name : "-no name-",
-		client->addr, pdata->attn_gpio);
 
-	if (pdata->gpio_config) {
-		dev_info(&client->dev, "Configuring GPIOs.\n");
-		error = pdata->gpio_config(pdata->gpio_data, true);
-		if (error < 0) {
-			dev_err(&client->dev, "Failed to configure GPIOs, code: %d.\n",
-				error);
-			return error;
-		}
-		dev_info(&client->dev, "Done with GPIO configuration.\n");
-	}
-
-	error = i2c_check_functionality(client->adapter, I2C_FUNC_I2C);
-	if (!error) {
-		dev_err(&client->dev, "i2c_check_functionality error %d.\n",
-			error);
-		return error;
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		dev_err(&client->dev, "i2c_check_functionality error\n");
+		return -EIO;
 	}
 
 	rmi_phys = kzalloc(sizeof(struct rmi_phys_device), GFP_KERNEL);
@@ -310,16 +281,9 @@ static int __devinit rmi_i2c_probe(struct i2c_client *client,
 	}
 
 	data->enabled = true;	/* We plan to come up enabled. */
-	data->irq = gpio_to_irq(pdata->attn_gpio);
-	if (pdata->level_triggered) {
-		data->irq_flags = IRQF_ONESHOT |
-			((pdata->attn_polarity == RMI_ATTN_ACTIVE_HIGH) ?
-			IRQF_TRIGGER_HIGH : IRQF_TRIGGER_LOW);
-	} else {
-		data->irq_flags =
-			(pdata->attn_polarity == RMI_ATTN_ACTIVE_HIGH) ?
-			IRQF_TRIGGER_RISING : IRQF_TRIGGER_FALLING;
-	}
+	data->irq = gpio_to_irq(pdata->irq);
+	data->irq_flags = (pdata->irq_polarity == RMI_IRQ_ACTIVE_HIGH) ?
+		IRQF_TRIGGER_RISING : IRQF_TRIGGER_FALLING;
 	data->phys = rmi_phys;
 
 	rmi_phys->data = data;
@@ -345,58 +309,60 @@ static int __devinit rmi_i2c_probe(struct i2c_client *client,
 		goto err_data;
 	}
 
+	if (pdata->gpio_config) {
+		error = pdata->gpio_config(&client->dev, true);
+		if (error < 0) {
+			dev_err(&client->dev, "failed to setup irq %d\n",
+				pdata->irq);
+			goto err_data;
+		}
+	}
+
 	error = rmi_register_phys_device(rmi_phys);
 	if (error) {
 		dev_err(&client->dev,
 			"failed to register physical driver at 0x%.2X.\n",
 			client->addr);
-		goto err_gpio;
+		goto err_data;
 	}
 	i2c_set_clientdata(client, rmi_phys);
 
-	if (pdata->attn_gpio > 0) {
+	if (pdata->irq > 0) {
 		error = acquire_attn_irq(data);
 		if (error < 0) {
 			dev_err(&client->dev,
 				"request_threaded_irq failed %d\n",
-				pdata->attn_gpio);
+				pdata->irq);
 			goto err_unregister;
 		}
 	}
 
 #if defined(CONFIG_RMI4_DEV)
-	error = gpio_export(pdata->attn_gpio, false);
+	error = gpio_export(pdata->irq, false);
 	if (error) {
-		dev_warn(&client->dev,
-			 "WARNING: Failed to export ATTN gpio!\n");
+		dev_warn(&client->dev, "%s: WARNING: Failed to "
+				 "export ATTN gpio!\n", __func__);
 		error = 0;
 	} else {
 		error = gpio_export_link(&(rmi_phys->rmi_dev->dev), "attn",
-					pdata->attn_gpio);
+					pdata->irq);
 		if (error) {
-			dev_warn(&(rmi_phys->rmi_dev->dev),
-				 "WARNING: Failed to symlink ATTN gpio!\n");
+			dev_warn(&(rmi_phys->rmi_dev->dev), "%s: WARNING: "
+				"Failed to symlink ATTN gpio!\n", __func__);
 			error = 0;
 		} else {
 			dev_info(&(rmi_phys->rmi_dev->dev),
-				"%s: Exported ATTN GPIO %d.", __func__,
-				pdata->attn_gpio);
+				"%s: Exported GPIO %d.", __func__, pdata->irq);
 		}
 	}
-
-	printk("rmi_i2c_probe start");
-	
 #endif /* CONFIG_RMI4_DEV */
 
-	dev_info(&client->dev, "registered rmi i2c driver at %#04x.\n",
+	dev_info(&client->dev, "registered rmi i2c driver at 0x%.2X.\n",
 			client->addr);
 	return 0;
 
 err_unregister:
 	rmi_unregister_phys_device(rmi_phys);
-err_gpio:
-	if (pdata->gpio_config)
-		pdata->gpio_config(pdata->gpio_data, false);
 err_data:
 	kfree(data);
 err_phys:
@@ -404,25 +370,24 @@ err_phys:
 	return error;
 }
 
-static int __devexit rmi_i2c_remove(struct i2c_client *client)
+static int rmi_i2c_remove(struct i2c_client *client)
 {
 	struct rmi_phys_device *phys = i2c_get_clientdata(client);
 	struct rmi_device_platform_data *pd = client->dev.platform_data;
 
-	disable_device(phys);
 	rmi_unregister_phys_device(phys);
 	kfree(phys->data);
 	kfree(phys);
 
 	if (pd->gpio_config)
-		pd->gpio_config(&pd->gpio_data, false);
+		pd->gpio_config(&client->dev, false);
 
 	return 0;
 }
 
 static const struct i2c_device_id rmi_id[] = {
 	{ "rmi", 0 },
-	{ "pantech_touch", 0 },
+	{ "rmi-i2c", 0 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, rmi_id);
@@ -430,16 +395,15 @@ MODULE_DEVICE_TABLE(i2c, rmi_id);
 static struct i2c_driver rmi_i2c_driver = {
 	.driver = {
 		.owner	= THIS_MODULE,
-		.name	= "pantech_touch"
+		.name	= "rmi-i2c"
 	},
 	.id_table	= rmi_id,
 	.probe		= rmi_i2c_probe,
-	.remove		= __devexit_p(rmi_i2c_remove),
+	.remove		= rmi_i2c_remove,
 };
 
 static int __init rmi_i2c_init(void)
 {
-	printk("rmi_i2c_init start");
 	return i2c_add_driver(&rmi_i2c_driver);
 }
 
@@ -448,10 +412,10 @@ static void __exit rmi_i2c_exit(void)
 	i2c_del_driver(&rmi_i2c_driver);
 }
 
+MODULE_AUTHOR("Christopher Heiny <cheiny@synaptics.com>");
+MODULE_AUTHOR("Eric Andersson <eric.andersson@unixphere.com>");
+MODULE_DESCRIPTION("RMI i2c driver");
+MODULE_LICENSE("GPL");
+
 module_init(rmi_i2c_init);
 module_exit(rmi_i2c_exit);
-
-MODULE_AUTHOR("Christopher Heiny <cheiny@synaptics.com>");
-MODULE_DESCRIPTION("RMI I2C driver");
-MODULE_LICENSE("GPL");
-MODULE_VERSION(RMI_DRIVER_VERSION);
