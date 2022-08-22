@@ -1829,7 +1829,7 @@ static void f11_set_abs_params(struct rmi_function_container *fc, int index)
 			y_min, y_max, 0, 0);
 #ifdef CONFIG_RMI4_F11_TYPEB
 	if (f11->type_b)
-		input_mt_init_slots(input, sensor->nbr_fingers);
+		input_mt_init_slots(input, sensor->nbr_fingers, 0);
 #endif
 #ifdef	CONFIG_RMI4_F11_PEN
 	if (sensor->sens_query.query9.has_pen)
